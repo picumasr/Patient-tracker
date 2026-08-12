@@ -26,7 +26,7 @@ button,.fileBtn{border:0;border-radius:11px;padding:11px 15px;background:var(--p
 .stat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center;box-shadow:0 2px 10px #17304210}
 .stat-card.today{border:2px solid var(--p);background:#eef8fb;cursor:pointer;width:100%}
 .stat-number{font-size:30px;font-weight:800;margin:4px 0}.stat-label{font-weight:700}.stat-hint{font-size:12px;color:var(--muted)}
-.install{display:none}
+.install{display:none}.search-wrap{margin:10px 0}.search-row{display:flex;gap:8px}.search-row input{flex:1}.search-row button{min-width:64px}.result-name{font-size:17px}.result-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}.result-open{float:left;margin-top:-34px}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.stats{grid-template-columns:1fr 1fr}main{padding:9px}}
 @media print{header,.no-print,button,.fileBtn{display:none!important}.card{box-shadow:none;border:0}.visit{break-inside:avoid}}
 </style>
@@ -47,7 +47,11 @@ button,.fileBtn{border:0;border-radius:11px;padding:11px 15px;background:var(--p
 <div class="stat-card"><div class="stat-label">مرضى جدد اليوم</div><div id="sNew" class="stat-number">0</div></div>
 </div>
 
-<input id="search" placeholder="🔍 ابحث بالاسم أو رقم الهاتف...">
+<div class="search-wrap">
+<label for="search">🔍 البحث السريع عن مريض</label>
+<div class="search-row"><input id="search" autocomplete="off" inputmode="search" placeholder="اكتب اسم المريض أو رقم الهاتف..."><button type="button" class="gray" id="clearSearch">مسح</button></div>
+<div id="searchCount" class="muted"></div>
+</div>
 <div id="list"></div>
 <div class="actions no-print"><button type="button" class="soft" id="dataBtn">💾 النسخ الاحتياطي والاستيراد</button></div>
 <div id="dataBox" class="card hidden">
@@ -95,7 +99,23 @@ function show(id){$(id).classList.remove('hidden')}function hide(id){$(id).class
 function todayVisits(){const t=localDate();const rows=[];patients.forEach(p=>(p.visits||[]).forEach(v=>{if(v.date===t)rows.push({p,v})}));return rows}
 function renderStats(){const t=localDate(),rows=todayVisits();$('sPatients').textContent=patients.length;$('sVisits').textContent=rows.length;$('sNew').textContent=patients.filter(p=>p.createdAt&&String(p.createdAt).slice(0,10)===t).length;$('stats').textContent=patients.length+' مريض'}
 function goHome(){show('home');hide('today');hide('editor');hide('profile');hide('fatal');renderList();scrollTo(0,0)}
-function renderList(){const q=$('search').value.trim();const a=patients.filter(p=>!q||String(p.name||'').includes(q)||String(p.phone||'').includes(q));renderStats();$('list').innerHTML=a.map(p=>`<div class="patient" data-id="${esc(p.id)}"><b>${esc(p.name)}</b><br><span class="muted">${esc(p.phone||'بدون هاتف')} • ${p.dob?age(p.dob):'العمر غير مسجل'} • ${(p.visits||[]).length} زيارة</span></div>`).join('')||'<p class="muted">لا توجد نتائج.</p>';document.querySelectorAll('.patient').forEach(el=>el.addEventListener('click',()=>openPatient(el.dataset.id)))}
+function renderList(){
+  const q=$('search').value.trim();
+  const a=patients.filter(p=>!q||String(p.name||'').includes(q)||String(p.phone||'').includes(q));
+  renderStats();
+  $('searchCount').textContent=q?(a.length+' نتيجة'):'';
+  $('list').innerHTML=a.map(p=>`<div class="patient" data-id="${esc(p.id)}">
+    <div class="result-name">👤 <b>${esc(p.name)}</b></div>
+    <div class="result-meta">
+      <span class="badge">🎂 ${p.dob?age(p.dob):'العمر غير مسجل'}</span>
+      <span class="badge">📞 ${esc(p.phone||'بدون هاتف')}</span>
+      <span class="badge">📋 ${(p.visits||[]).length} زيارة</span>
+    </div>
+    <div class="actions"><button type="button" class="soft result-open" data-open="${esc(p.id)}">فتح الملف ←</button></div>
+  </div>`).join('')||'<p class="muted">لا توجد نتائج مطابقة.</p>';
+  document.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openPatient(el.dataset.open)}));
+  document.querySelectorAll('.patient').forEach(el=>el.addEventListener('click',()=>openPatient(el.dataset.id)));
+}
 function showToday(){hide('home');hide('editor');hide('profile');hide('fatal');show('today');const rows=todayVisits();$('todayList').innerHTML=rows.length?rows.map(x=>`<div class="visit"><b>${esc(x.p.name)}</b><br><span class="muted">${esc(x.p.phone||'بدون هاتف')}</span><br><b>التشخيص:</b> ${esc(x.v.diag||'—')}<br><b>العلاج:</b> ${esc(x.v.med||'—')}<br><b>ملاحظات:</b> ${esc(x.v.notes||'—')}</div>`).join(''):'<p class="muted">لا توجد زيارات مسجلة اليوم.</p>';scrollTo(0,0)}
 function newPatient(p){editing=!!p;current=p||null;hide('home');hide('today');hide('profile');hide('fatal');show('editor');$('editorTitle').textContent=p?'تعديل بيانات المريض':'إضافة مريض';$('f_name').value=p?.name||'';$('f_dob').value=p?.dob||'';$('f_gender').value=p?.gender||'ذكر';$('f_phone').value=p?.phone||'';$('f_address').value=p?.address||'';$('f_diag').value=p?.diagnosis||'';$('f_notes').value=p?.notes||'';$('f_name').focus()}
 async function savePatient(){const name=$('f_name').value.trim();if(!name){alert('الاسم مطلوب');return}const p=editing?current:{id:uuid(),visits:[],createdAt:new Date().toISOString()};Object.assign(p,{name,dob:$('f_dob').value,gender:$('f_gender').value,phone:$('f_phone').value.trim(),address:$('f_address').value.trim(),diagnosis:$('f_diag').value.trim(),notes:$('f_notes').value.trim()});await put(p);await load();openPatient(p.id)}
@@ -112,7 +132,7 @@ function parseCSV(t){t=t.replace(/^\uFEFF/,'');const rows=[];let row=[],cell='',
 function norm(s){return String(s||'').toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim()}
 async function importCSV(e){const f=e.target.files[0];if(!f)return;try{const rows=parseCSV(await f.text());if(rows.length<2)throw new Error('ملف CSV فارغ');const h=rows[0].map(norm);const find=(...names)=>{for(const x of names){const i=h.findIndex(v=>v===norm(x)||v.includes(norm(x)));if(i>=0)return i}return -1};const ix={name:find('الاسم','اسم المريض','name'),dob:find('تاريخ الميلاد','dob'),gender:find('النوع','gender'),phone:find('الهاتف','رقم الهاتف','phone'),address:find('العنوان','address'),diagnosis:find('التشخيص','diagnosis'),notes:find('ملاحظات','notes')};if(ix.name<0)throw new Error('لم أجد عمود الاسم');let add=0,dup=0;for(const r of rows.slice(1)){const name=(r[ix.name]||'').trim();if(!name)continue;const phone=ix.phone>=0?(r[ix.phone]||'').trim():'';if(patients.some(p=>norm(p.name)===norm(name)&&(phone===''||p.phone===phone))){dup++;continue}await put({id:uuid(),name,dob:ix.dob>=0?r[ix.dob]||'':'',gender:ix.gender>=0?r[ix.gender]||'ذكر':'ذكر',phone,address:ix.address>=0?r[ix.address]||'':'',diagnosis:ix.diagnosis>=0?r[ix.diagnosis]||'':'',notes:ix.notes>=0?r[ix.notes]||'':'',visits:[],createdAt:new Date().toISOString()});add++}await load();renderList();$('dataMsg').innerHTML=`<div class="notice">تم استيراد <b>${add}</b> مريض. تم تجاهل <b>${dup}</b> سجل مكرر.</div>`}catch(err){$('dataMsg').innerHTML='<div class="notice warn">تعذر استيراد الملف: '+esc(err.message||'تأكد من صيغة CSV')+'</div>'}e.target.value=''}
 function fatal(e){console.error(e);hide('home');hide('today');hide('editor');hide('profile');show('fatal');$('fatalText').textContent=e?.message||'خطأ غير معروف'}
-$('addBtn').onclick=()=>newPatient();$('cancelBtn').onclick=goHome;$('saveBtn').onclick=()=>savePatient().catch(fatal);$('search').oninput=renderList;$('dataBtn').onclick=()=>$('dataBox').classList.toggle('hidden');$('backupBtn').onclick=backup;$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=e=>restoreBackup(e);$('csvFile').onchange=e=>importCSV(e);$('sampleBtn').onclick=sampleCSV;$('retryBtn').onclick=init;$('todayBtn').onclick=showToday;$('todayBackBtn').onclick=goHome;
+$('addBtn').onclick=()=>newPatient();$('cancelBtn').onclick=goHome;$('saveBtn').onclick=()=>savePatient().catch(fatal);$('search').oninput=renderList;$('clearSearch').onclick=()=>{$('search').value='';renderList();$('search').focus()};$('dataBtn').onclick=()=>$('dataBox').classList.toggle('hidden');$('backupBtn').onclick=backup;$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=e=>restoreBackup(e);$('csvFile').onchange=e=>importCSV(e);$('sampleBtn').onclick=sampleCSV;$('retryBtn').onclick=init;$('todayBtn').onclick=showToday;$('todayBackBtn').onclick=goHome;
 async function init(){try{hide('fatal');await openDB();await load();renderList()}catch(e){fatal(e)}}
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 init();
