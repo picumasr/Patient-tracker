@@ -55,13 +55,17 @@ button,.fileBtn{border:0;border-radius:11px;padding:11px 15px;background:var(--p
 <div id="list"></div>
 <div class="actions no-print"><button type="button" class="soft" id="dataBtn">💾 النسخ الاحتياطي والاستيراد</button></div>
 <div id="dataBox" class="card hidden">
-<h3>إدارة البيانات</h3>
+<h3>💾 النسخ الاحتياطي وحماية البيانات</h3>
+<div class="notice">النسخة الاحتياطية تحفظ المرضى والزيارات في ملف على جهازك. احتفظ بها في مكان آمن أو ارفعها إلى iCloud Drive/Google Drive يدويًا.</div>
+<div id="backupStatus" class="muted"></div>
 <div class="actions">
-<button type="button" id="backupBtn">⬇️ تصدير نسخة احتياطية</button>
-<button type="button" class="gray" id="restoreBtn">↩️ استعادة</button>
+<button type="button" id="backupBtn">⬇️ إنشاء نسخة احتياطية الآن</button>
+<button type="button" class="gray" id="restoreBtn">↩️ استعادة نسخة احتياطية</button>
 <label class="fileBtn">📥 استيراد CSV<input id="csvFile" type="file" accept=".csv,text/csv" hidden></label>
 <button type="button" class="soft" id="sampleBtn">📄 نموذج CSV</button>
-</div><p class="muted">يمكنك تنزيل بيانات Google Sheets بصيغة CSV ثم استيرادها هنا.</p><div id="dataMsg"></div>
+</div>
+<div id="dataMsg"></div>
+</div>
 </div><input id="restoreFile" type="file" accept=".json,application/json" hidden>
 </section>
 
@@ -155,16 +159,17 @@ current.visits.splice(i,1);await put(current);await load();renderStats();renderP
 }
 async function addVisit(){current.visits=current.visits||[];current.visits.push({date:$('v_date').value,weight:$('v_weight').value,diag:$('v_diag').value.trim(),med:$('v_med').value.trim(),notes:$('v_notes').value.trim()});await put(current);await load();renderStats();renderProfile()}
 async function deletePatient(){if(confirm('هل تريد حذف ملف المريض وجميع الزيارات؟')){await remove(current.id);await load();goHome()}}
-function backup(){const data={app:'عيادتي',version:2,date:new Date().toISOString(),patients};download('عيادتي-نسخة-احتياطية-'+localDate()+'.json',JSON.stringify(data,null,2),'application/json')}
+function backup(){const data={app:'عيادتي',version:3,date:new Date().toISOString(),patients};download('عيادتي-نسخة-احتياطية-'+localDate()+'.json',JSON.stringify(data,null,2),'application/json');localStorage.setItem('eyadaty-last-backup',new Date().toISOString());showBackupStatus()}
+function showBackupStatus(){const x=localStorage.getItem('eyadaty-last-backup');if($('backupStatus'))$('backupStatus').textContent=x?'آخر نسخة احتياطية: '+new Date(x).toLocaleString('ar-EG'):'لم يتم إنشاء نسخة احتياطية على هذا الجهاز بعد.'}
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-async function restoreBackup(e){const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!Array.isArray(x.patients))throw new Error();if(!confirm('سيتم استبدال البيانات الحالية بالنسخة الاحتياطية. هل تريد المتابعة؟'))return;const tx=db.transaction(STORE,'readwrite'),s=tx.objectStore(STORE);s.clear();x.patients.forEach(p=>s.put(p));tx.oncomplete=async()=>{await load();renderList();$('dataMsg').innerHTML='<div class="notice">تمت استعادة البيانات بنجاح.</div>'}}catch(e){$('dataMsg').innerHTML='<div class="notice warn">ملف النسخة الاحتياطية غير صالح.</div>'}e.target.value=''}
+async function restoreBackup(e){const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!Array.isArray(x.patients))throw new Error();if(!confirm('سيتم استبدال البيانات الحالية بالنسخة الاحتياطية. هل تريد المتابعة؟'))return;const tx=db.transaction(STORE,'readwrite'),s=tx.objectStore(STORE);s.clear();x.patients.forEach(p=>s.put(p));tx.oncomplete=async()=>{await load();renderList();showBackupStatus();$('dataMsg').innerHTML='<div class="notice">تمت استعادة البيانات بنجاح.</div>'}}catch(e){$('dataMsg').innerHTML='<div class="notice warn">ملف النسخة الاحتياطية غير صالح.</div>'}e.target.value=''}
 function sampleCSV(){download('نموذج-مرضى.csv','الاسم,تاريخ الميلاد,النوع,الهاتف,العنوان,التشخيص,ملاحظات\nمحمد أحمد,2018-01-15,ذكر,01000000000,المنيا,سخونة وكحة,مثال','text/csv;charset=utf-8')}
 function parseCSV(t){t=t.replace(/^\uFEFF/,'');const rows=[];let row=[],cell='',q=false;for(let i=0;i<t.length;i++){const c=t[i],n=t[i+1];if(c==='"'&&q&&n==='"'){cell+='"';i++;continue}if(c==='"'){q=!q;continue}if(!q&&(c===','||c===';')){row.push(cell.trim());cell='';continue}if(!q&&(c==='\n'||c==='\r')){if(c==='\r'&&n==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';continue}cell+=c}row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);return rows}
 function norm(s){return String(s||'').toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim()}
 async function importCSV(e){const f=e.target.files[0];if(!f)return;try{const rows=parseCSV(await f.text());if(rows.length<2)throw new Error('ملف CSV فارغ');const h=rows[0].map(norm);const find=(...names)=>{for(const x of names){const i=h.findIndex(v=>v===norm(x)||v.includes(norm(x)));if(i>=0)return i}return -1};const ix={name:find('الاسم','اسم المريض','name'),dob:find('تاريخ الميلاد','dob'),gender:find('النوع','gender'),phone:find('الهاتف','رقم الهاتف','phone'),address:find('العنوان','address'),diagnosis:find('التشخيص','diagnosis'),notes:find('ملاحظات','notes')};if(ix.name<0)throw new Error('لم أجد عمود الاسم');let add=0,dup=0;for(const r of rows.slice(1)){const name=(r[ix.name]||'').trim();if(!name)continue;const phone=ix.phone>=0?(r[ix.phone]||'').trim():'';if(patients.some(p=>norm(p.name)===norm(name)&&(phone===''||p.phone===phone))){dup++;continue}await put({id:uuid(),name,dob:ix.dob>=0?r[ix.dob]||'':'',gender:ix.gender>=0?r[ix.gender]||'ذكر':'ذكر',phone,address:ix.address>=0?r[ix.address]||'':'',diagnosis:ix.diagnosis>=0?r[ix.diagnosis]||'':'',notes:ix.notes>=0?r[ix.notes]||'':'',visits:[],createdAt:new Date().toISOString()});add++}await load();renderList();$('dataMsg').innerHTML=`<div class="notice">تم استيراد <b>${add}</b> مريض. تم تجاهل <b>${dup}</b> سجل مكرر.</div>`}catch(err){$('dataMsg').innerHTML='<div class="notice warn">تعذر استيراد الملف: '+esc(err.message||'تأكد من صيغة CSV')+'</div>'}e.target.value=''}
 function fatal(e){console.error(e);hide('home');hide('today');hide('editor');hide('profile');show('fatal');$('fatalText').textContent=e?.message||'خطأ غير معروف'}
 $('addBtn').onclick=()=>newPatient();$('cancelBtn').onclick=goHome;$('saveBtn').onclick=()=>savePatient().catch(fatal);$('search').oninput=renderList;$('clearSearch').onclick=()=>{$('search').value='';renderList();$('search').focus()};$('dataBtn').onclick=()=>$('dataBox').classList.toggle('hidden');$('backupBtn').onclick=backup;$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=e=>restoreBackup(e);$('csvFile').onchange=e=>importCSV(e);$('sampleBtn').onclick=sampleCSV;$('retryBtn').onclick=init;$('todayBtn').onclick=showToday;$('todayBackBtn').onclick=goHome;
-async function init(){try{hide('fatal');await openDB();await load();renderList()}catch(e){fatal(e)}}
+async function init(){try{hide('fatal');await openDB();await load();renderList();showBackupStatus()}catch(e){fatal(e)}}
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 init();
 })();
