@@ -139,7 +139,9 @@ const visits=(p.visits||[]).filter(v=>matchesVisitDate(v,q));
 if(visits.length)results.push({p,visits});
 }
 });
-$('list').innerHTML=results.length?results.map(x=>`<div class="patient-row" data-open="${esc(x.p.id)}"><div><b>${esc(x.p.name)}</b></div><div class="muted">${x.visits.length?'زيارات مطابقة: '+x.visits.length:'عدد الزيارات: '+(x.p.visits||[]).length}</div><button type="button" class="soft open-patient">فتح الملف ←</button></div>`).join(''):'<div class="notice">لا توجد نتائج مطابقة.</div>';
+const matchingVisitCount=dateLike?results.reduce((sum,x)=>sum+x.visits.length,0):null;
+const countBox=dateLike?`<div class="stat-card today-search-count" style="margin:10px 0;padding:14px;text-align:center"><div>عدد الزيارات في هذا اليوم</div><strong style="font-size:28px">${matchingVisitCount}</strong></div>`:'';
+$('list').innerHTML=countBox+(results.length?results.map(x=>`<div class="patient-row" data-open="${esc(x.p.id)}"><div><b>${esc(x.p.name)}</b></div><div class="muted">${x.visits.length?'زيارات مطابقة: '+x.visits.length:'عدد الزيارات: '+(x.p.visits||[]).length}</div><button type="button" class="soft open-patient">فتح الملف ←</button></div>`).join(''):'<div class="notice">لا توجد نتائج مطابقة.</div>');
 document.querySelectorAll('[data-open]').forEach(row=>{
 row.querySelector('.open-patient').onclick=e=>{e.stopPropagation();openPatient(row.dataset.open)};
 row.onclick=()=>openPatient(row.dataset.open);
