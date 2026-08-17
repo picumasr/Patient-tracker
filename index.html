@@ -39,7 +39,7 @@ button,.fileBtn{border:0;border-radius:11px;padding:11px 15px;background:var(--p
 
 <div class="stats">
 <div class="stat-card"><div class="stat-label">إجمالي المرضى</div><div id="sPatients" class="stat-number">0</div></div>
-<button type="button" id="todayBtn" class="stat-card today">
+<button type="button" id="todayBtn" class="stat-card today" onclick="openTodayPage()">
 <div class="stat-label">📋 زيارات اليوم</div>
 <div id="sVisits" class="stat-number">0</div>
 <div class="stat-hint">اضغط لعرض زيارات اليوم</div>
@@ -103,28 +103,57 @@ function show(id){$(id).classList.remove('hidden')}function hide(id){$(id).class
 function todayVisits(){const t=localDate();const rows=[];patients.forEach(p=>(p.visits||[]).forEach(v=>{if(v.date===t)rows.push({p,v})}));return rows}
 function renderStats(){const t=localDate(),rows=todayVisits();$('sPatients').textContent=patients.length;$('sVisits').textContent=rows.length;$('sNew').textContent=patients.filter(p=>p.createdAt&&String(p.createdAt).slice(0,10)===t).length;$('stats').textContent=patients.length+' مريض'}
 function goHome(){show('home');hide('today');hide('editor');hide('profile');hide('fatal');renderList();scrollTo(0,0)}
+function normalizeDateSearch(s){return String(s||'').trim().replace(/[.\-]/g,'/')}
+function matchesVisitDate(v,q){
+const d=String(v.date||'').trim(), n=normalizeDateSearch(q);
+if(!n)return false;
+if(d===n)return true;
+const p=d.split('/');
+if(p.length===3){
+const iso=p[0]+'-'+String(p[1]).padStart(2,'0')+'-'+String(p[2]).padStart(2,'0');
+if(iso===q)return true;
+const alt=String(p[2]).padStart(2,'0')+'/'+String(p[1]).padStart(2,'0')+'/'+p[0];
+if(alt===n)return true;
+}
+return false;
+}
 function renderList(){
-  const q=$('search').value.trim();
-  const a=patients.filter(p=>!q||String(p.name||'').includes(q)||String(p.phone||'').includes(q));
-  renderStats();
-  $('searchCount').textContent=q?(a.length+' نتيجة'):'';
-  $('list').innerHTML=a.map(p=>`<div class="patient" data-id="${esc(p.id)}">
-    <div class="result-name">👤 <b>${esc(p.name)}</b></div>
-    <div class="result-meta">
-      <span class="badge">🎂 ${p.dob?age(p.dob):'العمر غير مسجل'}</span>
-      <span class="badge">📞 ${esc(p.phone||'بدون هاتف')}</span>
-      <span class="badge">📋 ${(p.visits||[]).length} زيارة</span>
-    </div>
-    <div class="actions"><button type="button" class="soft result-open" data-open="${esc(p.id)}">فتح الملف ←</button></div>
-  </div>`).join('')||'<p class="muted">لا توجد نتائج مطابقة.</p>';
-  document.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openPatient(el.dataset.open)}));
-  document.querySelectorAll('.patient').forEach(el=>el.addEventListener('click',()=>openPatient(el.dataset.id)));
+const q=String($('search').value||'').trim().toLowerCase();
+const dateLike=/^\d{1,4}[\/.\-]\d{1,2}[\/.\-]\d{1,4}$/.test(q);
+const results=[];
+patients.forEach(p=>{
+const name=String(p.name||'').toLowerCase();
+if(!q){results.push({p,visits:p.visits||[]});return}
+if(!dateLike&&name.includes(q)){results.push({p,visits:p.visits||[]});return}
+if(dateLike){
+const visits=(p.visits||[]).filter(v=>matchesVisitDate(v,q));
+if(visits.length)results.push({p,visits});
+}
+});
+$('list').innerHTML=results.length?results.map(x=>`<div class="patient-row" data-open="${esc(x.p.id)}"><div><b>${esc(x.p.name)}</b></div><div class="muted">${x.visits.length?'زيارات مطابقة: '+x.visits.length:'عدد الزيارات: '+(x.p.visits||[]).length}</div><button type="button" class="soft open-patient">فتح الملف ←</button></div>`).join(''):'<div class="notice">لا توجد نتائج مطابقة.</div>';
+document.querySelectorAll('[data-open]').forEach(row=>{
+row.querySelector('.open-patient').onclick=e=>{e.stopPropagation();openPatient(row.dataset.open)};
+row.onclick=()=>openPatient(row.dataset.open);
+});
 }
 function printTodayReport(rows,today){
 const w=window.open('','_blank');
 if(!w){alert('السماح بفتح نافذة الطباعة مطلوب.');return}
 w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>تقرير زيارات اليوم</title><style>body{font-family:Arial,sans-serif;padding:24px}h1{font-size:22px}.row{border-bottom:1px solid #ccc;padding:12px 0}.muted{color:#666}</style></head><body><h1>تقرير زيارات اليوم</h1><div class="muted">${today} — إجمالي الزيارات: ${rows.length}</div>${rows.map((x,n)=>`<div class="row"><b>${n+1}. ${esc(x.p.name)}</b>${x.v.time?' — '+esc(x.v.time):''}<br>التشخيص: ${esc(x.v.diag||'—')}<br>العلاج: ${esc(x.v.med||'—')}<br>ملاحظات: ${esc(x.v.notes||'—')}</div>`).join('')}</body></html>`);
 w.document.close();w.focus();w.print();
+}
+function openTodayPage(){
+try{
+hide('home');hide('editor');hide('profile');hide('fatal');show('today');
+const list=$('todayList');
+if(list){
+const today=localDate();
+const rows=[];
+patients.forEach(p=>(p.visits||[]).forEach(v=>{if(v.date===today)rows.push({p,v})}));
+list.innerHTML='<div class="report-head"><h2>📋 زيارات اليوم</h2><div>التاريخ: '+esc(today)+' — إجمالي الزيارات: <b>'+rows.length+'</b></div></div>'+
+(rows.length?rows.map((x,n)=>'<div class="visit"><b>'+(n+1)+'. '+esc(x.p.name)+'</b><div>الوقت: '+esc(x.v.time||'—')+'</div><div>التشخيص: '+esc(x.v.diag||'—')+'</div><div>العلاج: '+esc(x.v.med||'—')+'</div><div>ملاحظات: '+esc(x.v.notes||'—')+'</div></div>').join(''):'<div class="notice">لا توجد زيارات مسجلة اليوم.</div>');
+}
+}catch(e){console.error(e);alert('تعذر فتح سجل زيارات اليوم.');}
 }
 function showToday(){
 const today=localDate();
@@ -134,7 +163,7 @@ $('todayList').innerHTML=`<div class="report-head"><h2>📋 تقرير زيار�
 (rows.length?rows.map((x,n)=>`<div class="visit today-row"><div><b>${n+1}. ${esc(x.p.name)}</b>${x.v.time?' — '+esc(x.v.time):''}</div><div><b>التشخيص:</b> ${esc(x.v.diag||'—')}</div><div><b>العلاج:</b> ${esc(x.v.med||'—')}</div><div><b>ملاحظات:</b> ${esc(x.v.notes||'—')}</div><div class="actions no-print"><button type="button" class="soft" data-today-open="${esc(x.p.id)}">فتح ملف المريض</button></div></div>`).join(''):'<div class="notice">لا توجد زيارات مسجلة اليوم.</div>');
 document.querySelectorAll('[data-today-open]').forEach(b=>b.onclick=()=>openPatient(b.dataset.todayOpen));
 $('printTodayBtn').onclick=()=>printTodayReport(rows,today);
-show('today');show('todayPage');hide('home');
+show('today');hide('home');
 }
 function newPatient(p){editing=!!p;current=p||null;hide('home');hide('today');hide('profile');hide('fatal');show('editor');$('editorTitle').textContent=p?'تعديل بيانات المريض':'إضافة مريض';$('f_name').value=p?.name||'';$('f_dob').value=p?.dob||'';$('f_gender').value=p?.gender||'ذكر';$('f_phone').value=p?.phone||'';$('f_address').value=p?.address||'';$('f_diag').value=p?.diagnosis||'';$('f_notes').value=p?.notes||'';$('f_name').focus()}
 async function savePatient(){const name=$('f_name').value.trim();if(!name){alert('الاسم مطلوب');return}const p=editing?current:{id:uuid(),visits:[],createdAt:new Date().toISOString()};Object.assign(p,{name,dob:$('f_dob').value,gender:$('f_gender').value,phone:$('f_phone').value.trim(),address:$('f_address').value.trim(),diagnosis:$('f_diag').value.trim(),notes:$('f_notes').value.trim()});await put(p);await load();openPatient(p.id)}
@@ -194,7 +223,7 @@ on('backupBtn',backup);
 on('restoreBtn',()=>{$('restoreFile').click()});
 on('sampleBtn',sampleCSV);
 on('retryBtn',init);
-on('todayBtn',()=>{showToday();});
+on('todayBtn',()=>{openTodayPage();});
 on('todayBackBtn',goHome);
 const search=$('search');if(search)search.addEventListener('input',renderList);
 const restore=$('restoreFile');if(restore)restore.addEventListener('change',restoreBackup);
@@ -208,7 +237,7 @@ init();
 
 document.addEventListener('click',function(e){
   const b=e.target.closest('#todayBtn,[data-action="today"]');
-  if(b){e.preventDefault();e.stopPropagation();showToday();}
+  if(b){e.preventDefault();showToday();}
 });
 </script>
 </body></html>
