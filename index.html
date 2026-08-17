@@ -49,7 +49,7 @@ button,.fileBtn{border:0;border-radius:11px;padding:11px 15px;background:var(--p
 
 <div class="search-wrap">
 <label for="search">🔍 البحث السريع عن مريض</label>
-<div class="search-row"><input id="search" autocomplete="off" inputmode="search" placeholder="اكتب اسم المريض أو رقم الهاتف..."><button type="button" class="gray" id="clearSearch">مسح</button></div>
+<div class="search-row"><input id="search" autocomplete="off" inputmode="search" placeholder="اكتب اسم المريض أو تاريخ الزيارة (مثال 17/08/2026)..."><button type="button" class="gray" id="clearSearch">مسح</button></div>
 <div id="searchCount" class="muted"></div>
 </div>
 <div id="list"></div>
@@ -103,18 +103,27 @@ function show(id){$(id).classList.remove('hidden')}function hide(id){$(id).class
 function todayVisits(){const t=localDate();const rows=[];patients.forEach(p=>(p.visits||[]).forEach(v=>{if(v.date===t)rows.push({p,v})}));return rows}
 function renderStats(){const t=localDate(),rows=todayVisits();$('sPatients').textContent=patients.length;$('sVisits').textContent=rows.length;$('sNew').textContent=patients.filter(p=>p.createdAt&&String(p.createdAt).slice(0,10)===t).length;$('stats').textContent=patients.length+' مريض'}
 function goHome(){show('home');hide('today');hide('editor');hide('profile');hide('fatal');renderList();scrollTo(0,0)}
-function normalizeDateSearch(s){return String(s||'').trim().replace(/[.\-]/g,'/')}
-function matchesVisitDate(v,q){
-const d=String(v.date||'').trim(), n=normalizeDateSearch(q);
-if(!n)return false;
-if(d===n)return true;
-const p=d.split('/');
-if(p.length===3){
-const iso=p[0]+'-'+String(p[1]).padStart(2,'0')+'-'+String(p[2]).padStart(2,'0');
-if(iso===q)return true;
-const alt=String(p[2]).padStart(2,'0')+'/'+String(p[1]).padStart(2,'0')+'/'+p[0];
-if(alt===n)return true;
+function normalizeDateSearch(s){
+return String(s||'').trim()
+.replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c)))
+.replace(/[.\-]/g,'/');
 }
+function dateKey(s){
+const n=normalizeDateSearch(s), a=n.split('/');
+if(a.length!==3)return null;
+let y,m,d;
+if(a[0].length===4){y=a[0];m=a[1];d=a[2]}
+else {d=a[0];m=a[1];y=a[2]}
+if(!/^\d{4}$/.test(y)||!/^\d{1,2}$/.test(m)||!/^\d{1,2}$/.test(d))return null;
+m=String(Number(m)).padStart(2,'0'); d=String(Number(d)).padStart(2,'0');
+if(Number(m)<1||Number(m)>12||Number(d)<1||Number(d)>31)return null;
+return y+'-'+m+'-'+d;
+}
+function matchesVisitDate(v,q){
+const key=dateKey(v.date), wanted=dateKey(q);
+if(key&&wanted)return key===wanted;
+const raw=normalizeDateSearch(q), stored=normalizeDateSearch(v.date);
+if(raw===stored)return true;
 return false;
 }
 function renderList(){
